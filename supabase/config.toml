@@ -1,0 +1,7 @@
+project_id = "presspaper-demo"
+
+[functions.summarize]
+verify_jwt = true
+
+[functions.translate]
+verify_jwt = true
