@@ -12,7 +12,11 @@ const countedThisSession = new Set<string>();
  * The initial values come from the same release row and keep rendering stable
  * while the fresh counters load.
  */
-export function useReleaseEngagement(releaseId: string, initialViews: number, initialComments: number) {
+export function useReleaseEngagement(
+  releaseId: string,
+  initialViews: number,
+  initialComments: number,
+) {
   const [views, setViews] = useState<number | null>(null);
   const [comments, setComments] = useState<number | null>(null);
   const available = isSupabaseConfigured && !!supabase;

@@ -42,14 +42,21 @@ interface AppState {
   // watchlists (shared so the sidebar + saved page stay in sync)
   watchlists: { id: string; name: string; count: number }[];
   watchlistItems: Record<string, string[]>;
-  setWatchlistData: (lists: { id: string; name: string; count: number }[], items: Record<string, string[]>) => void;
+  setWatchlistData: (
+    lists: { id: string; name: string; count: number }[],
+    items: Record<string, string[]>,
+  ) => void;
 }
 
 let toastSeq = 1;
 const savedWrites = new Map<string, Promise<void>>();
 const followWrites = new Map<string, Promise<void>>();
 
-function enqueueWrite(queue: Map<string, Promise<void>>, key: string, task: () => Promise<void>) {
+function enqueueWrite(
+  queue: Map<string, Promise<void>>,
+  key: string,
+  task: () => Promise<void>,
+) {
   const previous = queue.get(key) ?? Promise.resolve();
   const current = previous.catch(() => {}).then(task);
   queue.set(key, current);
@@ -99,16 +106,26 @@ export const useAppStore = create<AppState>((set, get) => ({
         if (nowSaved) restored.delete(id);
         else restored.add(id);
         set({ savedIds: restored });
-        get().pushToast({ title: "Couldn't update saved releases", description: "Your previous state has been restored.", variant: "error" });
+        get().pushToast({
+          title: "Couldn't update saved releases",
+          description: "Your previous state has been restored.",
+          variant: "error",
+        });
       };
       enqueueWrite(savedWrites, `${uid}:${id}`, async () => {
         try {
           const { error } = nowSaved
-            ? await client.from("saved_releases").upsert(
-                { user_id: uid, release_id: id },
-                { onConflict: "user_id,release_id", ignoreDuplicates: true }
-              )
-            : await client.from("saved_releases").delete().eq("user_id", uid).eq("release_id", id);
+            ? await client
+                .from("saved_releases")
+                .upsert(
+                  { user_id: uid, release_id: id },
+                  { onConflict: "user_id,release_id", ignoreDuplicates: true },
+                )
+            : await client
+                .from("saved_releases")
+                .delete()
+                .eq("user_id", uid)
+                .eq("release_id", id);
           if (error) rollback();
         } catch {
           rollback();
@@ -123,7 +140,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   toggleFollow: (slug) => {
     const uid = get().userId;
     if (!supabase || !uid) {
-      get().pushToast({ title: "Sign in to follow institutions", variant: "info" });
+      get().pushToast({
+        title: "Sign in to follow institutions",
+        variant: "info",
+      });
       return get().followedSlugs.has(slug);
     }
     const next = new Set(get().followedSlugs);
@@ -135,21 +155,36 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (supabase && uid) {
       const client = supabase;
       const rollback = () => {
-        if (get().userId !== uid || get().followedSlugs.has(slug) !== nowFollowing) return;
+        if (
+          get().userId !== uid ||
+          get().followedSlugs.has(slug) !== nowFollowing
+        )
+          return;
         const restored = new Set(get().followedSlugs);
         if (nowFollowing) restored.delete(slug);
         else restored.add(slug);
         set({ followedSlugs: restored });
-        get().pushToast({ title: "Couldn't update followed institutions", description: "Your previous state has been restored.", variant: "error" });
+        get().pushToast({
+          title: "Couldn't update followed institutions",
+          description: "Your previous state has been restored.",
+          variant: "error",
+        });
       };
       enqueueWrite(followWrites, `${uid}:${slug}`, async () => {
         try {
           const { error } = nowFollowing
             ? await client.from("follows").upsert(
                 { follower: uid, institution_slug: slug },
-                { onConflict: "follower,institution_slug", ignoreDuplicates: true }
+                {
+                  onConflict: "follower,institution_slug",
+                  ignoreDuplicates: true,
+                },
               )
-            : await client.from("follows").delete().eq("follower", uid).eq("institution_slug", slug);
+            : await client
+                .from("follows")
+                .delete()
+                .eq("follower", uid)
+                .eq("institution_slug", slug);
           if (error) rollback();
         } catch {
           rollback();
@@ -165,11 +200,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     const id = toastSeq++;
     set((s) => ({ toasts: [...s.toasts, { ...t, id }] }));
     // Errors linger a little longer so people can actually read them.
-    window.setTimeout(() => get().dismissToast(id), t.variant === "error" ? 5000 : 3200);
+    setTimeout(
+      () => get().dismissToast(id),
+      t.variant === "error" ? 5000 : 3200,
+    );
   },
-  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
+  dismissToast: (id) =>
+    set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) })),
 
   watchlists: [],
   watchlistItems: {},
-  setWatchlistData: (watchlists, watchlistItems) => set({ watchlists, watchlistItems }),
+  setWatchlistData: (watchlists, watchlistItems) =>
+    set({ watchlists, watchlistItems }),
 }));

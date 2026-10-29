@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Presspaper",
+    "slug": "presspaper",
+    "version": "1.0.0",
+    "scheme": "presspaper",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.presspaper.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "ai.presspaper.mobile",
+      "permissions": [],
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a cover or institution logo for Presspaper.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "tsconfigPaths": true
+    },
+    "platforms": ["ios", "android"],
+    "icon": "./assets/icon.png"
+  }
+}

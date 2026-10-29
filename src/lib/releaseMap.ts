@@ -1,5 +1,11 @@
 import type { ReleaseRow } from "@/lib/supabase";
-import type { Release, MediaScene, ReleaseType, ReleaseStatus, Institution } from "@/types";
+import type {
+  Release,
+  MediaScene,
+  ReleaseType,
+  ReleaseStatus,
+  Institution,
+} from "@/types";
 
 function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -11,21 +17,33 @@ function relativeTime(iso: string): string {
   if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function dateLabel(iso: string | null): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function timeLabel(iso: string | null): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function inferredTags(row: ReleaseRow): string[] {
-  const text = `${row.heading} ${row.subheading ?? ""} ${row.body ?? ""}`.toLowerCase();
+  const text =
+    `${row.heading} ${row.subheading ?? ""} ${row.body ?? ""}`.toLowerCase();
   const rules: [RegExp, string][] = [
     [/econom|financ|budget|bank|invest|employment|labour/, "Economy"],
     [/climate|environment|energy|sustainab|net zero|nature/, "Environment"],
@@ -34,7 +52,9 @@ function inferredTags(row: ReleaseRow): string[] {
     [/technology|digital|cyber|online|data/, "Technology"],
     [/transport|infrastructure|rail|road/, "Infrastructure"],
   ];
-  const matches = rules.filter(([pattern]) => pattern.test(text)).map(([, label]) => label);
+  const matches = rules
+    .filter(([pattern]) => pattern.test(text))
+    .map(([, label]) => label);
   return matches.length ? matches.slice(0, 3) : [row.type];
 }
 
@@ -65,7 +85,9 @@ export function releaseInstitution(release: Release): Institution {
 
 /** Convert a `public.releases` row into the in-app Release shape used by cards/tables. */
 export function rowToRelease(row: ReleaseRow): Release {
-  const attribution = row as ReleaseRow & { institution_verified?: boolean | null };
+  const attribution = row as ReleaseRow & {
+    institution_verified?: boolean | null;
+  };
   const stamp = row.published_at ?? row.created_at;
   const fresh = Date.now() - new Date(row.created_at).getTime() < 5 * 60 * 1000;
   return {

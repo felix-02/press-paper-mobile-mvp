@@ -1,4 +1,14 @@
-import { createContext, useContext, useEffect, useRef, useState, useCallback, type ReactNode } from "react";
+import { AppState, Linking } from "react-native";
+import { parseAuthLink, AUTH_CALLBACK } from "@/lib/authLinks";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAppStore } from "@/store/useAppStore";
@@ -38,6 +48,9 @@ interface SignUpArgs {
 }
 
 interface AuthValue {
+  recovery: boolean;
+  clearRecovery: () => void;
+  authLinkError: string | null;
   /** true when Supabase env vars are present (LIVE mode). */
   configured: boolean;
   /** true once the initial session check has finished. */
@@ -47,30 +60,60 @@ interface AuthValue {
   profileReady: boolean;
   profileError: string | null;
   role: Role | null;
-  signUp: (args: SignUpArgs) => Promise<{ error: string | null; needsConfirmation: boolean; role: Role | null }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null; role: Role | null; isAdmin: boolean }>;
+  signUp: (args: SignUpArgs) => Promise<{
+    error: string | null;
+    needsConfirmation: boolean;
+    role: Role | null;
+  }>;
+  signIn: (
+    email: string,
+    password: string,
+  ) => Promise<{ error: string | null; role: Role | null; isAdmin: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthValue | null>(null);
 
-async function fetchRole(userId: string): Promise<{ role: Role | null; error: string | null; isAdmin: boolean }> {
-  if (!supabase) return { role: null, error: "Supabase is not configured.", isAdmin: false };
-  const { data, error } = await supabase.from("profiles").select("role, is_admin, account_status").eq("id", userId).maybeSingle();
-  if (error) return { role: null, error: "We couldn't load your account profile. Try again.", isAdmin: false };
-  if (!data?.role) return { role: null, error: "Your account profile is missing. Contact support before trying again.", isAdmin: false };
+async function fetchRole(
+  userId: string,
+): Promise<{ role: Role | null; error: string | null; isAdmin: boolean }> {
+  if (!supabase)
+    return { role: null, error: "Supabase is not configured.", isAdmin: false };
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role, is_admin, account_status")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error)
+    return {
+      role: null,
+      error: "We couldn't load your account profile. Try again.",
+      isAdmin: false,
+    };
+  if (!data?.role)
+    return {
+      role: null,
+      error:
+        "Your account profile is missing. Contact support before trying again.",
+      isAdmin: false,
+    };
   const status = (data.account_status as AccountStatus | null) ?? "active";
   if (status !== "active") {
     return {
       role: null,
       isAdmin: false,
-      error: status === "banned"
-        ? "This account has been suspended by a platform administrator."
-        : "This account is archived. Contact support if it should be restored.",
+      error:
+        status === "banned"
+          ? "This account has been suspended by a platform administrator."
+          : "This account is archived. Contact support if it should be restored.",
     };
   }
-  return { role: data.role as Role, error: null, isAdmin: data.is_admin === true };
+  return {
+    role: data.role as Role,
+    error: null,
+    isAdmin: data.is_admin === true,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -81,20 +124,105 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
   const [profileError, setProfileError] = useState<string | null>(null);
   const profileRequest = useRef(0);
+  const currentUserId = useRef<string | null>(null);
+  const [recovery, setRecovery] = useState(false);
+  const [authLinkError, setAuthLinkError] = useState<string | null>(null);
+  const handledLinks = useRef(new Set<string>());
+
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+    let active = true;
+    const consume = async (url: string | null | undefined) => {
+      if (!url || handledLinks.current.has(url)) return;
+      const parsed = parseAuthLink(url);
+      if (!parsed) return;
+      handledLinks.current.add(url);
+      try {
+        const { error } = parsed.code
+          ? await client.auth.exchangeCodeForSession(parsed.code)
+          : await client.auth.setSession({
+              access_token: parsed.accessToken!,
+              refresh_token: parsed.refreshToken!,
+            });
+        if (!active) return;
+        if (error) {
+          handledLinks.current.delete(url);
+          setAuthLinkError(
+            "This sign-in link has expired or could not be verified. Request a new link.",
+          );
+        } else {
+          setAuthLinkError(null);
+          if (parsed.recovery) setRecovery(true);
+        }
+      } catch {
+        handledLinks.current.delete(url);
+        if (active)
+          setAuthLinkError(
+            "Unable to complete sign-in. Check your connection and request a new link.",
+          );
+      }
+    };
+    void Linking.getInitialURL()
+      .then(consume)
+      .catch(() => undefined);
+    const links = Linking.addEventListener("url", ({ url }) => {
+      void consume(url);
+    });
+    const syncRefresh = (state: string) => {
+      if (state === "active") {
+        client.auth.startAutoRefresh();
+      } else client.auth.stopAutoRefresh();
+    };
+    syncRefresh(AppState.currentState ?? "active");
+    const appState = AppState.addEventListener("change", syncRefresh);
+    return () => {
+      active = false;
+      links.remove();
+      appState.remove();
+      client.auth.stopAutoRefresh();
+    };
+  }, []);
 
   // Initial session + auth state subscription.
   useEffect(() => {
     if (!supabase) return;
     let active = true;
 
-    supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
-      if (!active) return;
-      setUser(data.session?.user ?? null);
-      setReady(true);
-    });
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    let authEventSeen = false;
+    const applySession = (session: Session | null) => {
+      const nextId = session?.user.id ?? null;
+      if (currentUserId.current !== nextId) {
+        currentUserId.current = nextId;
+        profileRequest.current += 1;
+        setProfile(null);
+        setProfileReady(nextId === null);
+        setProfileError(null);
+        useAppStore.getState().reset();
+        useAppStore.getState().setUserId(nextId);
+      }
       setUser(session?.user ?? null);
+      setReady(true);
+    };
+    supabase.auth
+      .getSession()
+      .then(({ data }: { data: { session: Session | null } }) => {
+        if (!active || authEventSeen) return;
+        applySession(data.session);
+      })
+      .catch(() => {
+        if (active && !authEventSeen) {
+          setReady(true);
+          setProfileError("Session could not be restored. Sign in again.");
+        }
+      });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      authEventSeen = true;
+      applySession(session);
+      if (event === "PASSWORD_RECOVERY") setRecovery(true);
+      if (event === "SIGNED_OUT") setRecovery(false);
     });
 
     return () => {
@@ -111,27 +239,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase
       .from("profiles")
       .select(
-        "id, role, full_name, institution_slug, institution_name, bio, verification_status, verification_domain, verified_at, is_admin, onboarding_complete, org_website, org_location, org_description, org_category, avatar_url, account_status, status_reason, status_changed_at"
+        "id, role, full_name, institution_slug, institution_name, bio, verification_status, verification_domain, verified_at, is_admin, onboarding_complete, org_website, org_location, org_description, org_category, avatar_url, account_status, status_reason, status_changed_at",
       )
       .eq("id", uid)
       .maybeSingle();
     if (request !== profileRequest.current) return;
     if (error) {
       setProfile(null);
-      setProfileError("We couldn't load your account profile. Check your connection and try again.");
+      setProfileError(
+        "We couldn't load your account profile. Check your connection and try again.",
+      );
       setProfileReady(true);
       return;
     }
     const p = (data as Profile) ?? null;
     setProfile(p);
-    setProfileError(p ? null : "Your account profile is missing. Contact support before continuing.");
+    setProfileError(
+      p
+        ? null
+        : "Your account profile is missing. Contact support before continuing.",
+    );
     setProfileReady(true);
     if (p) identifyUser(p.id, { role: p.role });
   }, []);
 
   const refreshProfile = useCallback(async () => {
     if (user) await loadProfile(user.id);
-  }, [user, loadProfile]);
+  }, [user?.id, loadProfile]);
 
   // Load the profile (role + institution) whenever the user changes.
   useEffect(() => {
@@ -144,7 +278,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setProfile(null);
     void loadProfile(user.id);
-  }, [user, loadProfile]);
+    const foreground = AppState.addEventListener("change", (state) => {
+      if (state === "active") void loadProfile(user.id);
+    });
+    return () => {
+      profileRequest.current += 1;
+      foreground.remove();
+    };
+  }, [user?.id, loadProfile]);
 
   // Reflect administrator moderation while the affected account is online.
   // Database policies enforce the block immediately; realtime updates the UI.
@@ -155,14 +296,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .channel(`profile-status:${user.id}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
-        () => void loadProfile(user.id)
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${user.id}`,
+        },
+        () => void loadProfile(user.id),
       )
       .subscribe();
     return () => {
       void client.removeChannel(channel);
     };
-  }, [user, loadProfile]);
+  }, [user?.id, loadProfile]);
 
   // Hydrate the in-memory store (saved + followed) from the database so the rest
   // of the app — which reads the store — reflects this user's real data.
@@ -180,27 +326,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     store.hydrate({ saved: [], followed: [] });
     store.setWatchlistData([], {});
     Promise.all([
-      supabase.from("saved_releases").select("release_id").eq("user_id", user.id),
-      supabase.from("follows").select("institution_slug").eq("follower", user.id),
+      supabase
+        .from("saved_releases")
+        .select("release_id")
+        .eq("user_id", user.id),
+      supabase
+        .from("follows")
+        .select("institution_slug")
+        .eq("follower", user.id),
     ]).then(([s, f]) => {
       if (!active || useAppStore.getState().userId !== user.id) return;
       if (s.error || f.error) {
-        useAppStore.getState().pushToast({ title: "Couldn't load your saved items", description: "Refresh the page to try again.", variant: "error" });
+        useAppStore.getState().pushToast({
+          title: "Couldn't load your saved items",
+          description: "Pull to refresh or sign in again to retry.",
+          variant: "error",
+        });
         return;
       }
-      const saved = ((s.data as { release_id: string }[] | null) ?? []).map((r) => r.release_id);
-      const followed = ((f.data as { institution_slug: string }[] | null) ?? []).map((r) => r.institution_slug);
+      const saved = ((s.data as { release_id: string }[] | null) ?? []).map(
+        (r) => r.release_id,
+      );
+      const followed = (
+        (f.data as { institution_slug: string }[] | null) ?? []
+      ).map((r) => r.institution_slug);
       useAppStore.getState().hydrate({ saved, followed });
     });
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user?.id]);
 
-  const signUp: AuthValue["signUp"] = async ({ email, password, role, fullName, emailRedirectTo }) => {
-    if (!supabase) return { error: "Supabase is not configured.", needsConfirmation: false, role: null };
+  const signUp: AuthValue["signUp"] = async ({
+    email,
+    password,
+    role,
+    fullName,
+    emailRedirectTo,
+  }) => {
+    if (!supabase)
+      return {
+        error: "Supabase is not configured.",
+        needsConfirmation: false,
+        role: null,
+      };
     if (role !== "individual") {
-      return { error: "Institution accounts require an invitation.", needsConfirmation: false, role: null };
+      return {
+        error: "Institution accounts require an invitation.",
+        needsConfirmation: false,
+        role: null,
+      };
     }
 
     const { data, error } = await supabase.auth.signUp({
@@ -208,14 +383,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { role: "individual", full_name: fullName },
-        emailRedirectTo,
+        emailRedirectTo: emailRedirectTo ?? AUTH_CALLBACK,
       },
     });
-    if (error) return { error: "We couldn't create the account. Check the details and try again.", needsConfirmation: false, role: null };
+    if (error)
+      return {
+        error:
+          "We couldn't create the account. Check the details and try again.",
+        needsConfirmation: false,
+        role: null,
+      };
 
     // Preserve Supabase's enumeration protection by returning the same outcome
     // for existing and newly registered addresses.
-    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    if (
+      data.user &&
+      Array.isArray(data.user.identities) &&
+      data.user.identities.length === 0
+    ) {
       return { error: null, needsConfirmation: true, role };
     }
 
@@ -226,10 +411,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn: AuthValue["signIn"] = async (email, password) => {
-    if (!supabase) return { error: "Supabase is not configured.", role: null, isAdmin: false };
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: "The email or password is incorrect, or the account is not ready yet.", role: null, isAdmin: false };
-    const result = data.user ? await fetchRole(data.user.id) : { role: null, error: "Sign-in did not return a user.", isAdmin: false };
+    if (!supabase)
+      return {
+        error: "Supabase is not configured.",
+        role: null,
+        isAdmin: false,
+      };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error)
+      return {
+        error:
+          "The email or password is incorrect, or the account is not ready yet.",
+        role: null,
+        isAdmin: false,
+      };
+    const result = data.user
+      ? await fetchRole(data.user.id)
+      : { role: null, error: "Sign-in did not return a user.", isAdmin: false };
     if (result.error) {
       await supabase.auth.signOut();
       return { error: result.error, role: null, isAdmin: false };
@@ -253,6 +454,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const value: AuthValue = {
+    recovery,
+    clearRecovery: () => setRecovery(false),
+    authLinkError,
     configured: isSupabaseConfigured,
     ready,
     user,

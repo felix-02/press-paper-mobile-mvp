@@ -25,7 +25,11 @@ export interface OrgInvite {
 export function useOrg() {
   const { profile, user } = useAuth();
   const slug = profile?.institution_slug ?? null;
-  const available = isSupabaseConfigured && !!supabase && profile?.role === "institution" && !!slug;
+  const available =
+    isSupabaseConfigured &&
+    !!supabase &&
+    profile?.role === "institution" &&
+    !!slug;
 
   const [members, setMembers] = useState<OrgMember[]>([]);
   const [invites, setInvites] = useState<OrgInvite[]>([]);
@@ -40,7 +44,8 @@ export function useOrg() {
   const active = status === "active";
 
   const can = {
-    publish: active && (role === "owner" || role === "admin" || role === "editor"),
+    publish:
+      active && (role === "owner" || role === "admin" || role === "editor"),
     invite: active && (role === "owner" || role === "admin"),
     approve: active && role === "owner",
     manage: active && (role === "owner" || role === "admin"),
@@ -66,7 +71,8 @@ export function useOrg() {
 
     if (requestId !== refreshId.current) return;
 
-    const firstError = memberResult.error ?? verificationResult.error ?? inviteResult.error;
+    const firstError =
+      memberResult.error ?? verificationResult.error ?? inviteResult.error;
     if (firstError) {
       setMembers([]);
       setInvites([]);
@@ -86,18 +92,26 @@ export function useOrg() {
     void refresh();
   }, [refresh]);
 
-  const createInvite = async (email: string, inviteRole: OrgRole): Promise<OrgInvite | null> => {
+  const createInvite = async (
+    email: string,
+    inviteRole: OrgRole,
+  ): Promise<OrgInvite | null> => {
     if (!supabase || !slug || !user) return null;
     setError(null);
-    const { data, error: inviteError } = await supabase.rpc("create_org_invite", {
-      p_slug: slug,
-      p_email: email.trim().toLowerCase(),
-      p_role: inviteRole,
-    });
+    const { data, error: inviteError } = await supabase.rpc(
+      "create_org_invite",
+      {
+        p_slug: slug,
+        p_email: email.trim().toLowerCase(),
+        p_role: inviteRole,
+      },
+    );
     if (inviteError) {
-      setError(inviteError.message.includes("Seat limit")
-        ? "This organisation has reached its seat limit."
-        : "We couldn't create that invite. Check the address and try again.");
+      setError(
+        inviteError.message.includes("Seat limit")
+          ? "This organisation has reached its seat limit."
+          : "We couldn't create that invite. Check the address and try again.",
+      );
       return null;
     }
     const invite = (Array.isArray(data) ? data[0] : data) as OrgInvite | null;
@@ -107,7 +121,10 @@ export function useOrg() {
 
   const revokeInvite = async (id: string): Promise<boolean> => {
     if (!supabase) return false;
-    const { data, error: revokeError } = await supabase.rpc("revoke_org_invite", { p_id: id });
+    const { data, error: revokeError } = await supabase.rpc(
+      "revoke_org_invite",
+      { p_id: id },
+    );
     if (revokeError || data !== "ok") {
       setError("We couldn't revoke that invite. Refresh and try again.");
       return false;
@@ -118,11 +135,16 @@ export function useOrg() {
 
   const approve = async (target: string): Promise<boolean> => {
     if (!supabase || !slug) return false;
-    const { data, error: approveError } = await supabase.rpc("set_member_status", { slug, target, new_status: "active" });
+    const { data, error: approveError } = await supabase.rpc(
+      "set_member_status",
+      { slug, target, new_status: "active" },
+    );
     if (approveError || data !== "ok") {
-      setError(data === "seat_limit"
-        ? "This organisation has reached its five-seat limit. Revoke an invite or remove a member first."
-        : "We couldn't approve that member. Refresh and try again.");
+      setError(
+        data === "seat_limit"
+          ? "This organisation has reached its five-seat limit. Revoke an invite or remove a member first."
+          : "We couldn't approve that member. Refresh and try again.",
+      );
       return false;
     }
     await refresh();
@@ -131,7 +153,10 @@ export function useOrg() {
 
   const decline = async (target: string): Promise<boolean> => {
     if (!supabase || !slug) return false;
-    const { data, error: declineError } = await supabase.rpc("set_member_status", { slug, target, new_status: "declined" });
+    const { data, error: declineError } = await supabase.rpc(
+      "set_member_status",
+      { slug, target, new_status: "declined" },
+    );
     if (declineError || data !== "ok") {
       setError("We couldn't decline that member. Refresh and try again.");
       return false;
@@ -140,9 +165,16 @@ export function useOrg() {
     return true;
   };
 
-  const setRole = async (target: string, newRole: OrgRole): Promise<boolean> => {
+  const setRole = async (
+    target: string,
+    newRole: OrgRole,
+  ): Promise<boolean> => {
     if (!supabase || !slug) return false;
-    const { data, error: roleError } = await supabase.rpc("set_member_role", { slug, target, new_role: newRole });
+    const { data, error: roleError } = await supabase.rpc("set_member_role", {
+      slug,
+      target,
+      new_role: newRole,
+    });
     if (roleError || data !== "ok") {
       setError("We couldn't change that member's role. Refresh and try again.");
       return false;
@@ -156,11 +188,36 @@ export function useOrg() {
 
   // 5-seat plan. Owner + active + pending invites all consume a seat.
   const SEAT_LIMIT = 5;
-  const seatsUsed = members.filter((m) => m.status !== "declined").length + invites.length;
+  const seatsUsed =
+    members.filter((m) => m.status !== "declined").length + invites.length;
   const seatsLeft = Math.max(0, SEAT_LIMIT - seatsUsed);
 
   // Publishing additionally requires the org to have verified its domain.
   const canPublishNow = can.publish && verified;
 
-  return { slug, role, status, active, verified, can, canPublishNow, members, activeMembers, pendingMembers, invites, loading, error, available, refresh, createInvite, revokeInvite, approve, decline, setRole, seatLimit: SEAT_LIMIT, seatsUsed, seatsLeft };
+  return {
+    slug,
+    role,
+    status,
+    active,
+    verified,
+    can,
+    canPublishNow,
+    members,
+    activeMembers,
+    pendingMembers,
+    invites,
+    loading,
+    error,
+    available,
+    refresh,
+    createInvite,
+    revokeInvite,
+    approve,
+    decline,
+    setRole,
+    seatLimit: SEAT_LIMIT,
+    seatsUsed,
+    seatsLeft,
+  };
 }

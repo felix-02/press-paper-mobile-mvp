@@ -44,16 +44,46 @@ export function useActivity() {
     setLoading(true);
     (async () => {
       const [{ data: saves }, { data: follows }] = await Promise.all([
-        supabase!.from("saved_releases").select("release_id, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(40),
-        supabase!.from("follows").select("institution_slug, created_at").eq("follower", user.id).order("created_at", { ascending: false }).limit(40),
+        supabase!
+          .from("saved_releases")
+          .select("release_id, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(40),
+        supabase!
+          .from("follows")
+          .select("institution_slug, created_at")
+          .eq("follower", user.id)
+          .order("created_at", { ascending: false })
+          .limit(40),
       ]);
-      const saveRows = (saves as { release_id: string; created_at: string }[] | null) ?? [];
-      const followRows = (follows as { institution_slug: string; created_at: string }[] | null) ?? [];
-      const headings = new Map((await resolveReleases(saveRows.map((s) => s.release_id))).map((r) => [r.id, r.heading]));
+      const saveRows =
+        (saves as { release_id: string; created_at: string }[] | null) ?? [];
+      const followRows =
+        (follows as
+          | { institution_slug: string; created_at: string }[]
+          | null) ?? [];
+      const headings = new Map(
+        (await resolveReleases(saveRows.map((s) => s.release_id))).map((r) => [
+          r.id,
+          r.heading,
+        ]),
+      );
       if (!active) return;
       const merged: ActivityItem[] = [
-        ...saveRows.map((s) => ({ key: `s-${s.release_id}`, kind: "save" as const, ts: Date.parse(s.created_at) || 0, releaseId: s.release_id, heading: headings.get(s.release_id) ?? "a release" })),
-        ...followRows.map((f) => ({ key: `f-${f.institution_slug}`, kind: "follow" as const, ts: Date.parse(f.created_at) || 0, slug: f.institution_slug })),
+        ...saveRows.map((s) => ({
+          key: `s-${s.release_id}`,
+          kind: "save" as const,
+          ts: Date.parse(s.created_at) || 0,
+          releaseId: s.release_id,
+          heading: headings.get(s.release_id) ?? "a release",
+        })),
+        ...followRows.map((f) => ({
+          key: `f-${f.institution_slug}`,
+          kind: "follow" as const,
+          ts: Date.parse(f.created_at) || 0,
+          slug: f.institution_slug,
+        })),
       ].sort((a, b) => b.ts - a.ts);
       setItems(merged);
       setLoading(false);

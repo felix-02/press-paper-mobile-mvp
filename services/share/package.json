@@ -1,0 +1,11 @@
+{
+  "name": "presspaper-share-links",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --experimental-test-isolation=none tests/*.test.mjs"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.0.0"
+  }
+}

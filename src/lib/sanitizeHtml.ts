@@ -1,6 +1,6 @@
-import DOMPurify from "dompurify";
+import { Parser } from "htmlparser2";
 
-const ALLOWED_TAGS = [
+const allowed = new Set([
   "p",
   "br",
   "strong",
@@ -18,15 +18,62 @@ const ALLOWED_TAGS = [
   "li",
   "blockquote",
   "a",
-];
-
-/** Sanitize institution-authored rich text to the editor's intentionally small format. */
+]);
+const dropped = new Set([
+  "script",
+  "style",
+  "iframe",
+  "object",
+  "svg",
+  "math",
+  "template",
+]);
+const voidTags = new Set(["br", "hr"]);
+function escapeText(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+function safeHref(value: string): boolean {
+  const url = value.trim();
+  if (/[\u0000-\u0020\\]/.test(url)) return false;
+  return /^(https?:|mailto:|\/(?!\/)|#)/i.test(url);
+}
+/** Portable allowlist parser. Native rendering never executes HTML or scripts. */
 export function sanitizeRichText(html: string): string {
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR: ["href", "title"],
-    ALLOW_ARIA_ATTR: false,
-    ALLOW_DATA_ATTR: false,
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|\/(?!\/)|#)/i,
-  });
+  let result = "";
+  let blocked = 0;
+  const stack: { name: string; output: boolean; blocks: boolean }[] = [];
+  const parser = new Parser(
+    {
+      onopentag(name, attrs) {
+        const blocks = dropped.has(name);
+        if (blocks) blocked++;
+        const output = blocked === 0 && allowed.has(name);
+        stack.push({ name, output, blocks });
+        if (!output) return;
+        result += `<${name}`;
+        if (name === "a") {
+          if (attrs.href && safeHref(attrs.href))
+            result += ` href="${escapeText(attrs.href.trim())}"`;
+          if (attrs.title) result += ` title="${escapeText(attrs.title)}"`;
+        }
+        result += ">";
+      },
+      ontext(text) {
+        if (!blocked) result += escapeText(text);
+      },
+      onclosetag(name) {
+        const entry = stack.pop();
+        if (entry?.blocks) blocked--;
+        if (entry?.output && !voidTags.has(name)) result += `</${name}>`;
+      },
+    },
+    { decodeEntities: true },
+  );
+  parser.write(html);
+  parser.end();
+  return result;
 }

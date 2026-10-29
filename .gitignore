@@ -1,11 +1,17 @@
-node_modules
-dist
-dist-ssr
-*.local
-.DS_Store
-.vercel
-npm-debug.log*
-
-# Local environment (Supabase keys) — never commit
+node_modules/
+.expo/
+dist/
+android/
+ios/
 .env
-.env.local
+.env.*
+!.env.example
+*.local
+*.tsbuildinfo
+.DS_Store
+.vercel/
+npm-debug.log*
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

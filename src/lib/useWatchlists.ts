@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/auth/AuthProvider";
 import { useAppStore } from "@/store/useAppStore";
@@ -22,7 +22,10 @@ export function useWatchlists() {
   const [loading, setLoading] = useState(available);
   const [error, setError] = useState<string | null>(null);
 
+  const requestRef = useRef(0);
+
   const refresh = useCallback(async () => {
+    const request = ++requestRef.current;
     if (!available || !supabase || !user) {
       setData([], {});
       setError(null);
@@ -32,9 +35,18 @@ export function useWatchlists() {
     setLoading(true);
     setError(null);
     const [watchlistResult, itemResult] = await Promise.all([
-      supabase.from("watchlists").select("id, name, created_at").eq("user_id", user.id).order("created_at", { ascending: true }),
+      supabase
+        .from("watchlists")
+        .select("id, name, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true }),
       supabase.from("watchlist_items").select("watchlist_id, release_id"),
     ]);
+    if (
+      request !== requestRef.current ||
+      useAppStore.getState().userId !== user.id
+    )
+      return;
     if (watchlistResult.error || itemResult.error) {
       setError("We couldn't load your watchlists. Try again.");
       setLoading(false);
@@ -43,27 +55,38 @@ export function useWatchlists() {
     const wls = watchlistResult.data;
     const its = itemResult.data;
     const map: Record<string, string[]> = {};
-    ((its as { watchlist_id: string; release_id: string }[] | null) ?? []).forEach((r) => {
+    (
+      (its as { watchlist_id: string; release_id: string }[] | null) ?? []
+    ).forEach((r) => {
       (map[r.watchlist_id] ??= []).push(r.release_id);
     });
-    const listRows = ((wls as { id: string; name: string }[] | null) ?? []).map((l) => ({
-      id: l.id,
-      name: l.name,
-      count: map[l.id]?.length ?? 0,
-    }));
+    const listRows = ((wls as { id: string; name: string }[] | null) ?? []).map(
+      (l) => ({
+        id: l.id,
+        name: l.name,
+        count: map[l.id]?.length ?? 0,
+      }),
+    );
     setData(listRows, map);
     setLoading(false);
-  }, [available, user, setData]);
+  }, [available, user?.id, setData]);
 
   useEffect(() => {
     void refresh();
+    return () => {
+      requestRef.current += 1;
+    };
   }, [refresh]);
 
   const create = async (name: string) => {
     const cleanName = name.trim();
     if (!cleanName || cleanName.length > 80) return null;
     if (!supabase || !user) return null;
-    const { data, error } = await supabase.from("watchlists").insert({ user_id: user.id, name: cleanName }).select("id, name").single();
+    const { data, error } = await supabase
+      .from("watchlists")
+      .insert({ user_id: user.id, name: cleanName })
+      .select("id, name")
+      .single();
     if (error) return null;
     await refresh();
     return (data as { id: string; name: string } | null) ?? null;
@@ -81,7 +104,10 @@ export function useWatchlists() {
     const cleanName = name.trim();
     if (!cleanName || cleanName.length > 80) return false;
     if (!supabase) return false;
-    const { error } = await supabase.from("watchlists").update({ name: cleanName }).eq("id", id);
+    const { error } = await supabase
+      .from("watchlists")
+      .update({ name: cleanName })
+      .eq("id", id);
     if (error) return false;
     await refresh();
     return true;
@@ -89,7 +115,9 @@ export function useWatchlists() {
 
   const addItem = async (watchlistId: string, releaseId: string) => {
     if (!supabase) return false;
-    const { error } = await supabase.from("watchlist_items").upsert({ watchlist_id: watchlistId, release_id: releaseId });
+    const { error } = await supabase
+      .from("watchlist_items")
+      .upsert({ watchlist_id: watchlistId, release_id: releaseId });
     if (error) return false;
     await refresh();
     return true;
@@ -97,14 +125,33 @@ export function useWatchlists() {
 
   const removeItem = async (watchlistId: string, releaseId: string) => {
     if (!supabase) return false;
-    const { error } = await supabase.from("watchlist_items").delete().eq("watchlist_id", watchlistId).eq("release_id", releaseId);
+    const { error } = await supabase
+      .from("watchlist_items")
+      .delete()
+      .eq("watchlist_id", watchlistId)
+      .eq("release_id", releaseId);
     if (error) return false;
     await refresh();
     return true;
   };
 
   const itemIds = (watchlistId: string): string[] => items[watchlistId] ?? [];
-  const inList = (watchlistId: string, releaseId: string) => (items[watchlistId] ?? []).includes(releaseId);
+  const inList = (watchlistId: string, releaseId: string) =>
+    (items[watchlistId] ?? []).includes(releaseId);
 
-  return { lists, items, available, loading, error, refresh, create, remove, rename, addItem, removeItem, itemIds, inList };
+  return {
+    lists,
+    items,
+    available,
+    loading,
+    error,
+    refresh,
+    create,
+    remove,
+    rename,
+    addItem,
+    removeItem,
+    itemIds,
+    inList,
+  };
 }

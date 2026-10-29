@@ -15,7 +15,11 @@ interface AiSummaryState {
  * something. The Edge Function reads the source release through the caller's
  * RLS-scoped session; caller-supplied document text is never sent to the model.
  */
-export function useAiSummary(release: Release, fallback: string, _bodyText?: string): AiSummaryState {
+export function useAiSummary(
+  release: Release,
+  fallback: string,
+  _bodyText?: string,
+): AiSummaryState {
   const [summary, setSummary] = useState(fallback);
   const [loading, setLoading] = useState(false);
   const [isAi, setIsAi] = useState(false);
@@ -48,7 +52,7 @@ export function useAiSummary(release: Release, fallback: string, _bodyText?: str
         },
         () => {
           if (active) setLoading(false);
-        }
+        },
       );
 
     return () => {

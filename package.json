@@ -1,42 +1,55 @@
 {
-  "name": "presspaper",
-  "private": true,
+  "name": "presspaper-native",
   "version": "1.0.0",
-  "type": "module",
-  "description": "Presspaper — verified institutional publishing and reader platform",
-  "engines": {
-    "node": "^20.19.0 || >=22.12.0 <25"
-  },
+  "private": true,
+  "main": "index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit",
-    "test": "vitest run",
-    "check": "npm run typecheck && npm test && npm run build && npm audit"
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:ui",
+    "export": "expo export --platform all",
+    "test:unit": "node --test --experimental-test-isolation=none tests/*.native.mjs services/share/tests/*.test.mjs",
+    "test:ui": "jest --runInBand",
+    "format": "prettier --write App.tsx index.js src tests services *.json *.cjs *.md"
   },
   "dependencies": {
-    "@fontsource-variable/inter": "^5.2.8",
-    "@supabase/supabase-js": "^2.108.2",
-    "dompurify": "^3.4.11",
-    "lucide-react": "^0.453.0",
-    "posthog-js": "^1.160.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.27.0",
-    "zustand": "^4.5.5"
+    "@expo/vector-icons": "^15.0.2",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/bottom-tabs": "^7.21.0",
+    "@react-navigation/native": "^7.5.1",
+    "@react-navigation/native-stack": "^7.21.0",
+    "@supabase/supabase-js": "^2.118.0",
+    "expo": "~55.0.0",
+    "expo-dev-client": "~55.0.41",
+    "expo-file-system": "~55.0.26",
+    "expo-image-picker": "~55.0.24",
+    "expo-print": "~55.0.19",
+    "expo-sharing": "~55.0.25",
+    "expo-status-bar": "~55.0.6",
+    "expo-system-ui": "~55.0.22",
+    "htmlparser2": "^12.0.0",
+    "react": "19.2.0",
+    "react-native": "0.83.10",
+    "react-native-render-html": "^6.3.4",
+    "react-native-safe-area-context": "~5.6.2",
+    "react-native-screens": "~4.23.0",
+    "react-native-svg": "15.15.3",
+    "react-native-url-polyfill": "^4.0.0",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.2",
-    "@types/node": "^22.20.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^6.0.3",
-    "jsdom": "^29.1.1",
-    "sharp": "^0.33.5",
-    "tailwindcss": "^4.0.0",
-    "typescript": "^5.6.3",
-    "vite": "^8.1.4",
-    "vitest": "^4.1.10"
+    "@testing-library/react-native": "^13.3.3",
+    "@types/react": "~19.2.0",
+    "jest": "^29.7.0",
+    "jest-expo": "~55.0.0",
+    "prettier": "^3.6.2",
+    "react-test-renderer": "^19.2.0",
+    "typescript": "~5.9.2"
+  },
+  "type": "module",
+  "engines": {
+    "node": "^22.18.0 || ^24.0.0"
   }
 }

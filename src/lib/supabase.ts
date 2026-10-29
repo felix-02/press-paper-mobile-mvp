@@ -1,44 +1,36 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import "react-native-url-polyfill/auto";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  createClient,
+  processLock,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
 
-// Runtime data is always Supabase-backed. Tests deliberately run without a
-// client so pure UI and mapping logic can be verified in isolation.
-const isTestMode = import.meta.env.MODE === "test";
-const requestedMode = isTestMode ? "test" : (import.meta.env.VITE_APP_MODE as string | undefined)?.toLowerCase() ?? "live";
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-
-if (!isTestMode && requestedMode !== "live") {
-  throw new Error('VITE_APP_MODE must be "live". Only database-backed runtime mode is supported.');
-}
-
-if (Boolean(url) !== Boolean(anonKey)) {
-  throw new Error("VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be configured together.");
-}
-
-if (!isTestMode && (!url || !anonKey)) {
-  throw new Error("Supabase is required. Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-}
-
-export const isSupabaseConfigured = !isTestMode && Boolean(url && anonKey);
-
+// Expo replaces these public values at bundle time. Only a publishable/anon key
+// belongs here; authorization remains in Postgres RLS and checked RPCs.
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+export const isSupabaseConfigured = Boolean(url && anonKey);
 export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(url as string, anonKey as string, {
+  ? createClient(url!, anonKey!, {
       auth: {
-        persistSession: true, // keeps the session across refreshes (localStorage)
+        storage: AsyncStorage,
         autoRefreshToken: true,
-        detectSessionInUrl: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+        flowType: "pkce",
+        lock: processLock,
       },
     })
   : null;
 
-// Shape of a row in public.releases (kept loose on purpose).
 export interface ReleaseRow {
   id: string;
   owner: string;
   institution_slug: string;
   institution_name: string | null;
   type: string;
-  status: "Published" | "Draft" | "Scheduled";
+  status: "Published" | "Draft" | "Scheduled" | "Archived";
   heading: string;
   subheading: string | null;
   body: string | null;

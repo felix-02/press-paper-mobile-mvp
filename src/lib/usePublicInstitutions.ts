@@ -20,7 +20,9 @@ export interface PublicInstitution extends Institution {
   releasesCount: number;
 }
 
-export function publicInstitutionFromRow(row: PublicInstitutionRow): PublicInstitution {
+export function publicInstitutionFromRow(
+  row: PublicInstitutionRow,
+): PublicInstitution {
   return {
     slug: row.slug,
     name: row.name,
@@ -65,14 +67,18 @@ export function usePublicInstitutions() {
           setError("We couldn't load verified institutions. Try again.");
           return;
         }
-        setInstitutions(((data as PublicInstitutionRow[] | null) ?? []).map(publicInstitutionFromRow));
+        setInstitutions(
+          ((data as PublicInstitutionRow[] | null) ?? []).map(
+            publicInstitutionFromRow,
+          ),
+        );
       },
       () => {
         if (!active) return;
         setInstitutions([]);
         setLoading(false);
         setError("We couldn't load verified institutions. Try again.");
-      }
+      },
     );
     return () => {
       active = false;

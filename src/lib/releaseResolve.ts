@@ -1,4 +1,8 @@
-import { supabase, isSupabaseConfigured, type ReleaseRow } from "@/lib/supabase";
+import {
+  supabase,
+  isSupabaseConfigured,
+  type ReleaseRow,
+} from "@/lib/supabase";
 import { rowToRelease } from "@/lib/releaseMap";
 import type { Release } from "@/types";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,7 +19,9 @@ export async function resolveReleases(ids: string[]): Promise<Release[]> {
       .eq("status", "Published")
       .eq("moderation_status", "active")
       .eq("institution_verified", true);
-    (data as ReleaseRow[] | null)?.forEach((row) => map.set(row.id, rowToRelease(row)));
+    (data as ReleaseRow[] | null)?.forEach((row) =>
+      map.set(row.id, rowToRelease(row)),
+    );
   }
   return ids.map((id) => map.get(id)).filter((r): r is Release => !!r);
 }

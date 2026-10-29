@@ -37,13 +37,19 @@ function rowToComment(r: CommentRow): CommentNode {
 }
 
 function relative(iso: string): string {
-  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  const secs = Math.max(
+    0,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 1000),
+  );
   if (secs < 45) return "Just now";
   const m = Math.floor(secs / 60);
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
 }
 
 function buildTree(rows: CommentNode[]): CommentNode[] {
@@ -51,7 +57,8 @@ function buildTree(rows: CommentNode[]): CommentNode[] {
   rows.forEach((comment) => byId.set(comment.id, { ...comment, replies: [] }));
   const roots: CommentNode[] = [];
   byId.forEach((node) => {
-    if (node.parentId && byId.has(node.parentId)) byId.get(node.parentId)!.replies.push(node);
+    if (node.parentId && byId.has(node.parentId))
+      byId.get(node.parentId)!.replies.push(node);
     else roots.push(node);
   });
   return roots;
@@ -71,7 +78,9 @@ export function useComments(releaseId: string) {
     if (!supabase) {
       setRows([]);
       setLoading(false);
-      setLoadError("Comments are unavailable because the database connection is not configured.");
+      setLoadError(
+        "Comments are unavailable because the database connection is not configured.",
+      );
       return;
     }
     let active = true;
@@ -97,7 +106,9 @@ export function useComments(releaseId: string) {
         setLoading(false);
       } catch {
         if (!active) return;
-        setLoadError("Comments couldn't be loaded. Check your connection and try again.");
+        setLoadError(
+          "Comments couldn't be loaded. Check your connection and try again.",
+        );
         setLoading(false);
       }
     })();
@@ -105,9 +116,12 @@ export function useComments(releaseId: string) {
     return () => {
       active = false;
     };
-  }, [releaseId, retryKey]);
+  }, [releaseId, retryKey, user?.id]);
 
-  const post = async (body: string, parentId?: string | null): Promise<boolean> => {
+  const post = async (
+    body: string,
+    parentId?: string | null,
+  ): Promise<boolean> => {
     const text = body.trim();
     if (!text || posting) return false;
     if (text.length > 4000) {
@@ -115,7 +129,9 @@ export function useComments(releaseId: string) {
       return false;
     }
     if (!supabase || !user || loading || loadError) {
-      setPostError("Comments aren't available right now. Try reloading the thread.");
+      setPostError(
+        "Comments aren't available right now. Try reloading the thread.",
+      );
       return false;
     }
     setPosting(true);
@@ -123,7 +139,13 @@ export function useComments(releaseId: string) {
     try {
       const { data, error: insertError } = await supabase
         .from("comments")
-        .insert({ release_id: releaseId, author: user.id, author_name: profile?.full_name?.trim() || null, body: text, parent_id: parentId ?? null })
+        .insert({
+          release_id: releaseId,
+          author: user.id,
+          author_name: profile?.full_name?.trim() || null,
+          body: text,
+          parent_id: parentId ?? null,
+        })
         .select("*")
         .single();
       if (insertError || !data) {
@@ -138,7 +160,9 @@ export function useComments(releaseId: string) {
       return true;
     } catch {
       setPosting(false);
-      setPostError("Your comment wasn't posted. Check your connection and try again.");
+      setPostError(
+        "Your comment wasn't posted. Check your connection and try again.",
+      );
       return false;
     }
   };

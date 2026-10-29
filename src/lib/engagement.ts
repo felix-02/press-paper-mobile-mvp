@@ -32,12 +32,19 @@ async function flush() {
     ]);
 
     const viewMap = new Map<string, number>();
-    ((eng as { id: string; views: number }[] | null) ?? []).forEach((r) => viewMap.set(r.id, r.views));
+    ((eng as { id: string; views: number }[] | null) ?? []).forEach((r) =>
+      viewMap.set(r.id, r.views),
+    );
     const cmtMap = new Map<string, number>();
-    ((cmts as { release_id: string }[] | null) ?? []).forEach((r) => cmtMap.set(r.release_id, (cmtMap.get(r.release_id) ?? 0) + 1));
+    ((cmts as { release_id: string }[] | null) ?? []).forEach((r) =>
+      cmtMap.set(r.release_id, (cmtMap.get(r.release_id) ?? 0) + 1),
+    );
 
     ids.forEach((id) => {
-      cache.set(id, { views: viewMap.get(id) ?? 0, comments: cmtMap.get(id) ?? 0 });
+      cache.set(id, {
+        views: viewMap.get(id) ?? 0,
+        comments: cmtMap.get(id) ?? 0,
+      });
       notify(id);
     });
   } catch {
